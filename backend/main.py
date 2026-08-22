@@ -3,6 +3,8 @@ import time
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
+from backend.spatial import get_position
+
 app = FastAPI()
 
 connected_clients: list[WebSocket] = []
@@ -39,6 +41,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
             message["expires_at"] = (
                 message["created_at"] + ttl
+            )
+            message["position"] = get_position(
+                message["text"]
             )
 
             payload = json.dumps(message)

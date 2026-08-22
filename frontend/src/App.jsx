@@ -138,8 +138,8 @@ function App() {
               key={message.id}
               className="message"
               style={{
-                left: `${20 + ((index * 17) % 65)}%`,
-                top: `${10 + ((index * 23) % 75)}%`,
+                left: `${message.position.x}%`,
+                top: `${message.position.y}%`,
                 borderColor: message.color,
               }}
             >
