@@ -16,6 +16,22 @@ function App() {
 
   const socket = useRef(null);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+        const now = Date.now() / 1000;
+
+        setMessages((previousMessages) =>
+        previousMessages.filter(
+            (message) => message.expires_at > now
+        )
+        );
+    }, 100);
+
+    return () => {
+        clearInterval(interval);
+    };
+    }, []);
+
   // Give this browser tab a temporary identity.
   const userId = useRef(
     crypto.randomUUID()
