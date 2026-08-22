@@ -11,6 +11,8 @@ const COLORS = [
 ];
 
 function App() {
+  const messageRefs = useRef({});
+
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
 
@@ -69,6 +71,53 @@ function App() {
       ws.close();
     };
   }, []);
+
+  useEffect(() => {
+    if (!socket.current) return;
+
+    const observers = [];
+
+    messages.forEach((message) => {
+        const element = messageRefs.current[message.id];
+
+        if (!element) return;
+
+        const observer = new ResizeObserver(() => {
+        const rect = element.getBoundingClientRect();
+
+        const board = element.closest(".messages");
+
+        if (!board) return;
+
+        const boardRect = board.getBoundingClientRect();
+
+        const widthPercent =
+            (rect.width / boardRect.width) * 100;
+
+        const heightPercent =
+            (rect.height / boardRect.height) * 100;
+
+        console.log(
+            message.id,
+            "actual size:",
+            widthPercent,
+            heightPercent
+        );
+        });
+
+        observer.observe(element);
+
+        observers.push(observer);
+    });
+
+    return () => {
+        observers.forEach((observer) => {
+        observer.disconnect();
+        });
+    };
+    }, [messages]);
+
+
 
   function sendMessage() {
     const text = input.trim();
@@ -135,15 +184,20 @@ function App() {
 
           {messages.map((message, index) => (
             <div
-              key={message.id}
-              className="message"
-              style={{
-                left: `${message.position.x}%`,
-                top: `${message.position.y}%`,
-                width: `${message.size.width}%`,
-                minHeight: `${message.size.height}%`,
-                borderColor: message.color,
-              }}
+                key={message.id}
+                ref={(element) => {
+                    if (element) {
+                    messageRefs.current[message.id] = element;
+                    }
+                }}
+                className="message"
+                style={{
+                    left: `${message.position.x}%`,
+                    top: `${message.position.y}%`,
+                    width: `${message.size.width}%`,
+                    minHeight: `${message.size.height}%`,
+                    borderColor: message.color,
+                }}
             >
               <span
                 className="sender-dot"
