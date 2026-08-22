@@ -12,64 +12,166 @@ body {
   width: 100vw;
   height: 100vh;
   display: flex;
-  background: #f5f5f5;
+  background: #f7f7f7;
 }
 
-.left-panel {
-  width: 32%;
+
+/* -------------------------------- */
+/* Navigation rail                  */
+/* -------------------------------- */
+
+.nav-rail {
+  width: 56px;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: white;
-  border-right: 1px solid #ccc;
+  align-items: center;
+  gap: 14px;
+  padding-top: 16px;
+
+  background: #111;
 }
 
-.pinned-section {
-  flex: 1;
-  padding: 24px;
-}
+.nav-rail button {
+  width: 36px;
+  height: 36px;
 
-.pinned-section h2 {
-  margin-top: 0;
-}
-
-.input-section {
-  display: flex;
-  gap: 8px;
-  padding: 16px;
-  border-top: 1px solid #ccc;
-}
-
-.input-section input {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 16px;
-}
-
-.input-section button {
-  padding: 12px 16px;
   border: none;
   border-radius: 8px;
+
+  background: transparent;
+  color: white;
+
+  font-size: 18px;
   cursor: pointer;
 }
 
-.conversation {
-  position: relative;
-  width: 68%;
-  height: 100%;
-  overflow: hidden;
-  background: #fafafa;
+.nav-rail button:hover {
+  background: #2a2a2a;
 }
+
+
+/* -------------------------------- */
+/* Context / pinned panel           */
+/* -------------------------------- */
+
+.context-panel {
+  width: 230px;
+  height: 100%;
+
+  background: white;
+  border-right: 1px solid #ddd;
+}
+
+.pinned-section {
+  padding: 20px;
+}
+
+.pinned-section h3 {
+  margin: 0;
+}
+
+
+/* -------------------------------- */
+/* Spatial board                    */
+/* -------------------------------- */
+
+.board {
+  position: relative;
+
+  flex: 1;
+  height: 100%;
+
+  background: #f5f5f5;
+}
+
+.messages {
+  position: absolute;
+
+  inset: 0 0 70px 0;
+
+  overflow: hidden;
+}
+
+
+/* -------------------------------- */
+/* Messages                         */
+/* -------------------------------- */
 
 .message {
   position: absolute;
+
   max-width: 240px;
+
   padding: 10px 14px;
-  border-radius: 12px;
+
+  border: 2px solid;
+  border-radius: 14px;
+
   background: white;
-  border: 1px solid #ddd;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.08);
+
   transform: translate(-50%, -50%);
+}
+
+.sender-dot {
+  display: inline-block;
+
+  width: 8px;
+  height: 8px;
+
+  margin-right: 7px;
+
+  border-radius: 50%;
+}
+
+
+/* -------------------------------- */
+/* Input                            */
+/* -------------------------------- */
+
+.input-area {
+  position: absolute;
+
+  left: 20px;
+  right: 20px;
+  bottom: 16px;
+
+  display: flex;
+  gap: 8px;
+}
+
+.input-area input {
+  flex: 1;
+
+  padding: 13px 16px;
+
+  border: 1px solid #ccc;
+  border-radius: 12px;
+
+  font-size: 15px;
+
+  outline: none;
+}
+
+.input-area input:focus {
+  border-color: #888;
+}
+
+.input-area button {
+  padding: 0 18px;
+
+  border: none;
+  border-radius: 12px;
+
+  background: #111;
+  color: white;
+
+  cursor: pointer;
+}
+
+.input-area button:hover {
+  background: #333;
 }
