@@ -140,6 +140,8 @@ function App() {
               style={{
                 left: `${message.position.x}%`,
                 top: `${message.position.y}%`,
+                width: `${message.size.width}%`,
+                minHeight: `${message.size.height}%`,
                 borderColor: message.color,
               }}
             >

@@ -1,22 +1,24 @@
-import hashlib
 import math
 
 
 BOARD_WIDTH = 100
 BOARD_HEIGHT = 100
 
-MESSAGE_WIDTH = 12
-MESSAGE_HEIGHT = 8
+MIN_WIDTH = 8
+MAX_WIDTH = 30
 
-MIN_DISTANCE = 10
+MIN_HEIGHT = 6
+MAX_HEIGHT = 18
+
+PADDING = 2
 
 
 def get_semantic_position(text: str) -> tuple[float, float]:
     """
-    Temporary semantic position.
+    Temporary semantic anchor.
 
-    This represents where the message WOULD LIKE to be.
-    It is not necessarily its final position.
+    This is the preferred region for the message.
+    It is not necessarily the final position.
     """
 
     text = text.lower()
@@ -50,20 +52,89 @@ def get_semantic_position(text: str) -> tuple[float, float]:
     return (50, 50)
 
 
-def is_position_free(
-    x: float,
-    y: float,
-    existing_positions: list[dict],
+def get_message_size(text: str) -> dict[str, float]:
+    """
+    Estimate the visual size of a message from its length.
+    """
+
+    length = len(text.strip())
+
+    width = 8 + length / 2
+    width = max(MIN_WIDTH, min(MAX_WIDTH, width))
+
+    if length <= 20:
+        height = MIN_HEIGHT
+    elif length <= 50:
+        height = 10
+    else:
+        height = MAX_HEIGHT
+
+    return {
+        "width": width,
+        "height": height,
+    }
+
+
+def rectangles_overlap(
+    a_position: dict,
+    a_size: dict,
+    b_position: dict,
+    b_size: dict,
 ) -> bool:
 
-    for position in existing_positions:
+    a_left = a_position["x"] - a_size["width"] / 2
+    a_right = a_position["x"] + a_size["width"] / 2
+    a_top = a_position["y"] - a_size["height"] / 2
+    a_bottom = a_position["y"] + a_size["height"] / 2
 
-        distance = math.sqrt(
-            (x - position["x"]) ** 2
-            + (y - position["y"]) ** 2
-        )
+    b_left = b_position["x"] - b_size["width"] / 2
+    b_right = b_position["x"] + b_size["width"] / 2
+    b_top = b_position["y"] - b_size["height"] / 2
+    b_bottom = b_position["y"] + b_size["height"] / 2
 
-        if distance < MIN_DISTANCE:
+    return not (
+        a_right + PADDING < b_left
+        or a_left - PADDING > b_right
+        or a_bottom + PADDING < b_top
+        or a_top - PADDING > b_bottom
+    )
+
+
+def inside_board(
+    position: dict,
+    size: dict,
+) -> bool:
+
+    half_width = size["width"] / 2
+    half_height = size["height"] / 2
+
+    return (
+        half_width <= position["x"] <= BOARD_WIDTH - half_width
+        and
+        half_height <= position["y"] <= BOARD_HEIGHT - half_height
+    )
+
+
+def is_position_valid(
+    candidate_position: dict,
+    candidate_size: dict,
+    existing_messages: list[dict],
+) -> bool:
+
+    if not inside_board(
+        candidate_position,
+        candidate_size,
+    ):
+        return False
+
+    for existing in existing_messages:
+
+        if rectangles_overlap(
+            candidate_position,
+            candidate_size,
+            existing["position"],
+            existing["size"],
+        ):
             return False
 
     return True
@@ -71,48 +142,60 @@ def is_position_free(
 
 def find_free_position(
     preferred_position: tuple[float, float],
-    existing_positions: list[dict],
-) -> dict[str, float]:
+    size: dict,
+    existing_messages: list[dict],
+) -> dict | None:
 
     preferred_x, preferred_y = preferred_position
 
-    # First try the preferred position.
-    if is_position_free(
-        preferred_x,
-        preferred_y,
-        existing_positions,
+    candidates = []
+
+    # How far we search from the semantic center.
+    MAX_RADIUS = 45
+
+    # Distance between candidate points.
+    STEP = 2
+
+    for x_offset in range(
+        -MAX_RADIUS,
+        MAX_RADIUS + 1,
+        STEP,
     ):
-        return {
-            "x": preferred_x,
-            "y": preferred_y,
-        }
 
-    # Search around the preferred position.
-    for radius in range(5, 50, 5):
+        for y_offset in range(
+            -MAX_RADIUS,
+            MAX_RADIUS + 1,
+            STEP,
+        ):
 
-        for angle in range(0, 360, 30):
+            candidate = {
+                "x": preferred_x + x_offset,
+                "y": preferred_y + y_offset,
+            }
 
-            radians = math.radians(angle)
-
-            x = preferred_x + radius * math.cos(radians)
-            y = preferred_y + radius * math.sin(radians)
-
-            # Keep message inside board.
-            if not (5 <= x <= 95 and 5 <= y <= 95):
+            if not is_position_valid(
+                candidate,
+                size,
+                existing_messages,
+            ):
                 continue
 
-            if is_position_free(
-                x,
-                y,
-                existing_positions,
-            ):
-                return {
-                    "x": x,
-                    "y": y,
-                }
+            # Euclidean distance from semantic center.
+            distance = math.sqrt(
+                x_offset ** 2 +
+                y_offset ** 2
+            )
 
-    # Fallback
-    return {
-        "x": preferred_x,
-        "y": preferred_y,
-    }
+            candidates.append(
+                (distance, candidate)
+            )
+
+    if not candidates:
+        return None
+
+    # Closest valid position wins.
+    candidates.sort(
+        key=lambda item: item[0]
+    )
+
+    return candidates[0][1]

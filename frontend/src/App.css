@@ -78,6 +78,7 @@ body {
 
 .board {
   position: relative;
+  overflow: hidden;
 
   flex: 1;
   height: 100%;
@@ -101,8 +102,6 @@ body {
 .message {
   position: absolute;
 
-  max-width: 240px;
-
   padding: 10px 14px;
 
   border: 2px solid;
@@ -114,6 +113,11 @@ body {
     0 4px 14px rgba(0, 0, 0, 0.08);
 
   transform: translate(-50%, -50%);
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  white-space: normal;
 }
 
 .sender-dot {
