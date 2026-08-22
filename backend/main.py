@@ -7,7 +7,17 @@ app = FastAPI()
 
 connected_clients: list[WebSocket] = []
 
-MESSAGE_TTL = 10
+
+def calculate_ttl(text: str) -> int:
+    length = len(text.strip())
+
+    if length <= 5:
+        return 5
+
+    if length <= 30:
+        return 10
+
+    return 15
 
 
 @app.websocket("/ws")
@@ -22,8 +32,13 @@ async def websocket_endpoint(websocket: WebSocket):
             message = json.loads(raw_message)
 
             message["created_at"] = time.time()
+
+            ttl = calculate_ttl(message["text"])
+
+            message["ttl"] = ttl
+
             message["expires_at"] = (
-                message["created_at"] + MESSAGE_TTL
+                message["created_at"] + ttl
             )
 
             payload = json.dumps(message)
