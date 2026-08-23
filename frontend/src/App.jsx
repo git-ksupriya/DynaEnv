@@ -71,6 +71,11 @@ function App() {
           return;
         }
 
+        if (message.type === "rate_limit") {
+            console.log(message.message);
+            return;
+        }
+
         setMessages((previousMessages) => {
           const existingIndex =
             previousMessages.findIndex(

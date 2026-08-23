@@ -190,6 +190,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.append(websocket)
 
+    message_count = 0
+    window_start = time.time()
+
     await websocket.send_text(
         json.dumps({
             "type": "queue_status",
@@ -249,6 +252,25 @@ async def websocket_endpoint(websocket: WebSocket):
                         break
 
                 continue
+
+            now = time.time()
+
+            if now - window_start >= MESSAGE_WINDOW:
+                window_start = now
+                message_count = 0
+
+            if message_count >= MESSAGE_LIMIT:
+                await websocket.send_text(
+                    json.dumps({
+                        "type": "rate_limit",
+                        "message": "Too many messages. Please wait."
+                    })
+                )
+                continue
+
+            message_count += 1
+
+            
             # If something is already waiting,
             # preserve FIFO order.
             if pending_messages:
