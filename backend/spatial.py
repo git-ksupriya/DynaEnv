@@ -199,3 +199,122 @@ def find_free_position(
     )
 
     return candidates[0][1]
+
+def get_semantic_center(
+    similar_messages: list[tuple[float, dict]],
+) -> tuple[float, float]:
+
+    if not similar_messages:
+        return (50, 50)
+
+    total_weight = 0.0
+    weighted_x = 0.0
+    weighted_y = 0.0
+
+    for similarity, message in similar_messages:
+
+        position = message["position"]
+
+        # Ignore very weak semantic relationships.
+        weight = max(similarity, 0.0)
+
+        weighted_x += (
+            position["x"] * weight
+        )
+
+        weighted_y += (
+            position["y"] * weight
+        )
+
+        total_weight += weight
+
+    if total_weight == 0:
+        return (50, 50)
+
+    return (
+        weighted_x / total_weight,
+        weighted_y / total_weight,
+    )
+
+def get_dynamic_position(
+    similar_message: dict | None,
+    dissimilar_message: dict | None,
+    existing_messages: list[dict],
+    size: dict,
+) -> dict | None:
+
+    # No existing messages.
+    # Start in the center.
+    if similar_message is None:
+
+        return find_free_position(
+            (50, 50),
+            size,
+            existing_messages,
+        )
+
+
+    # Position of most similar message.
+    sx = similar_message["position"]["x"]
+    sy = similar_message["position"]["y"]
+
+
+    # If there is no dissimilar message,
+    # simply prefer the similar message's region.
+
+    if dissimilar_message is None:
+
+        preferred = (
+            sx,
+            sy,
+        )
+
+    else:
+
+        # Position of most dissimilar message.
+
+        dx = dissimilar_message["position"]["x"]
+        dy = dissimilar_message["position"]["y"]
+
+
+        # Vector from dissimilar → similar.
+
+        vx = sx - dx
+        vy = sy - dy
+
+
+        distance = math.sqrt(
+            vx ** 2 +
+            vy ** 2
+        )
+
+
+        if distance == 0:
+
+            preferred = (
+                sx,
+                sy,
+            )
+
+        else:
+
+            # Continue in the direction
+            # away from the dissimilar message.
+
+            PUSH_DISTANCE = 12
+
+            preferred = (
+                sx + (vx / distance) * PUSH_DISTANCE,
+                sy + (vy / distance) * PUSH_DISTANCE,
+            )
+
+
+    # Now use the rectangle-aware
+    # placement algorithm to find the
+    # closest valid position.
+
+    return find_free_position(
+        preferred,
+        size,
+        existing_messages,
+    )

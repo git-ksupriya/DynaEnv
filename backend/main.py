@@ -6,12 +6,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from backend.spatial import (
-    get_semantic_position,
     get_message_size,
     find_free_position,
+    get_dynamic_position,
+    is_position_valid,
 )
-from backend.spatial import is_position_valid
-
+from backend.embeddings import (
+    get_embedding,
+    get_most_similar_and_dissimilar,
+)
 
 connected_clients: list[WebSocket] = []
 active_messages: list[dict] = []
@@ -89,31 +92,34 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         active_message["size"] = new_size
 
+                        other_messages = [
+                            other
+                            for other in active_messages
+                            if other["id"] != message_id
+                        ]
+
                         if not is_position_valid(
                             active_message["position"],
                             new_size,
-                            [
-                                other
-                                for other in active_messages
-                                if other["id"] != message_id
-                            ],
+                            other_messages,
                         ):
 
-                            new_position = find_free_position(
-                                get_semantic_position(
-                                    active_message["text"]
-                                ),
+                            most_similar, most_dissimilar = (
+                                get_most_similar_and_dissimilar(
+                                    active_message["embedding"],
+                                    other_messages,
+                                )
+                            )
+
+                            new_position = get_dynamic_position(
+                                most_similar,
+                                most_dissimilar,
+                                other_messages,
                                 new_size,
-                                [
-                                    other
-                                    for other in active_messages
-                                    if other["id"] != message_id
-                                ],
                             )
 
                             if new_position is not None:
                                 active_message["position"] = new_position
-
                         break
 
                 continue
@@ -128,8 +134,21 @@ async def websocket_endpoint(websocket: WebSocket):
                 message["created_at"] + ttl
             )
 
-            preferred_position = get_semantic_position(
+            # Generate semantic embedding.
+            embedding = get_embedding(
                 message["text"]
+            )
+
+            message["embedding"] = embedding
+
+
+            # Find the strongest semantic attraction
+            # and repulsion targets.
+            most_similar, most_dissimilar = (
+                get_most_similar_and_dissimilar(
+                    embedding,
+                    active_messages,
+                )
             )
 
             size = get_message_size(
@@ -138,10 +157,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
             message["size"] = size
 
-            position = find_free_position(
-                preferred_position,
-                size,
+            position = get_dynamic_position(
+                most_similar,
+                most_dissimilar,
                 active_messages,
+                size,
             )
 
             if position is None:
@@ -154,7 +174,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
             active_messages.append(message)
 
-            payload = json.dumps(message)
+            broadcast_message = {
+                key: value
+                for key, value in message.items()
+                if key != "embedding"
+            }
+
+            payload = json.dumps(broadcast_message)
 
             for client in connected_clients:
                 await client.send_text(payload)
