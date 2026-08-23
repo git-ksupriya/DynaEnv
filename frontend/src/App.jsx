@@ -47,49 +47,84 @@ function App() {
   );
 
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8000/ws");
+    let reconnectTimeout;
+    let stopped = false;
 
-    socket.current = ws;
+    function connect() {
+      if (stopped) return;
 
-    ws.onopen = () => {
-      console.log("Connected to DynaEnv");
-    };
+      const ws = new WebSocket(
+        "ws://localhost:8000/ws"
+      );
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+      socket.current = ws;
 
-      if (message.type === "queue_status") {
-              setWaitingCount(message.count);
-              return;
-            }
+      ws.onopen = () => {
+        console.log("Connected to DynaEnv");
+      };
 
-      setMessages((previousMessages) => {
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
 
-        const existingIndex = previousMessages.findIndex(
-          (item) => item.id === message.id
-        );
-
-        if (existingIndex === -1) {
-          return [
-            ...previousMessages,
-            message,
-          ];
+        if (message.type === "queue_status") {
+          setWaitingCount(message.count);
+          return;
         }
 
-        const updatedMessages = [...previousMessages];
+        setMessages((previousMessages) => {
+          const existingIndex =
+            previousMessages.findIndex(
+              (item) => item.id === message.id
+            );
 
-        updatedMessages[existingIndex] = message;
+          if (existingIndex === -1) {
+            return [
+              ...previousMessages,
+              message,
+            ];
+          }
 
-        return updatedMessages;
-      });
-    };
+          const updatedMessages = [
+            ...previousMessages,
+          ];
 
-    ws.onclose = () => {
-      console.log("Disconnected from DynaEnv");
-    };
+          updatedMessages[existingIndex] = message;
+
+          return updatedMessages;
+        });
+      };
+
+      ws.onclose = () => {
+        console.log(
+          "Disconnected. Reconnecting..."
+        );
+
+        if (!stopped) {
+          reconnectTimeout = setTimeout(
+            connect,
+            1000
+          );
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.log(
+          "WebSocket error:",
+          error
+        );
+      };
+    }
+
+    connect();
 
     return () => {
-      ws.close();
+      stopped = true;
+
+      clearTimeout(reconnectTimeout);
+
+      if (socket.current) {
+        socket.current.close();
+      }
     };
   }, []);
 
@@ -148,6 +183,14 @@ function App() {
 
     if (!text) return;
 
+    if (
+      !socket.current ||
+      socket.current.readyState !== WebSocket.OPEN
+    ) {
+      console.log("WebSocket is not connected yet.");
+      return;
+    }
+
     const message = {
       id: crypto.randomUUID(),
       user_id: userId.current,
@@ -159,6 +202,7 @@ function App() {
 
     setInput("");
   }
+
 
   function handleKeyDown(event) {
     if (event.key === "Enter") {

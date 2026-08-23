@@ -60,8 +60,31 @@ async def broadcast_queue_status():
         "count": len(pending_messages),
     })
 
+    dead_clients = []
+
     for client in connected_clients:
-        await client.send_text(payload)
+        try:
+            await client.send_text(payload)
+        except Exception:
+            dead_clients.append(client)
+
+    for client in dead_clients:
+        if client in connected_clients:
+            connected_clients.remove(client)
+
+async def broadcast_message(payload: str):
+
+    dead_clients = []
+
+    for client in connected_clients:
+        try:
+            await client.send_text(payload)
+        except Exception:
+            dead_clients.append(client)
+
+    for client in dead_clients:
+        if client in connected_clients:
+            connected_clients.remove(client)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -129,18 +152,17 @@ async def try_place_message(message: dict) -> bool:
 
     active_messages.append(message)
 
-    broadcast_message = {
+    broadcast_payload = {
         key: value
         for key, value in message.items()
         if key != "embedding"
     }
 
     payload = json.dumps(
-        broadcast_message
+        broadcast_payload
     )
 
-    for client in connected_clients:
-        await client.send_text(payload)
+    await broadcast_message(payload)
 
     return True
 
@@ -150,36 +172,27 @@ async def process_queue():
 
         message = pending_messages[0]
 
-        # Give the oldest queued message a fresh TTL
-        # only when it is actually being displayed.
-        message["created_at"] = time.time()
-
-        ttl = calculate_ttl(
-            message["text"]
-        )
-
-        message["ttl"] = ttl
-
-        message["expires_at"] = (
-            message["created_at"] + ttl
-        )
-
-        placed = await try_place_message(
-            message
-        )
+        placed = await try_place_message(message)
 
         if not placed:
             # Board is still full.
-            # Keep the message in the queue.
             break
 
-        # Successfully displayed.
         pending_messages.pop(0)
+
+        await broadcast_queue_status()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.append(websocket)
+
+    await websocket.send_text(
+        json.dumps({
+            "type": "queue_status",
+            "count": len(pending_messages),
+        })
+    )
 
     try:
         while True:
