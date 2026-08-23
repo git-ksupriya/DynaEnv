@@ -54,7 +54,7 @@ function App() {
       if (stopped) return;
 
       const ws = new WebSocket(
-        "ws://localhost:8000/ws"
+        import.meta.env.VITE_WS_URL
       );
 
       socket.current = ws;
