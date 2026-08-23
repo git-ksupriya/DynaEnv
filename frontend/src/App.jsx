@@ -57,10 +57,25 @@ function App() {
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
 
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        message,
-      ]);
+      setMessages((previousMessages) => {
+
+        const existingIndex = previousMessages.findIndex(
+          (item) => item.id === message.id
+        );
+
+        if (existingIndex === -1) {
+          return [
+            ...previousMessages,
+            message,
+          ];
+        }
+
+        const updatedMessages = [...previousMessages];
+
+        updatedMessages[existingIndex] = message;
+
+        return updatedMessages;
+      });
     };
 
     ws.onclose = () => {
@@ -73,51 +88,54 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!socket.current) return;
+      if (!socket.current) return;
 
-    const observers = [];
+      const observers = [];
 
-    messages.forEach((message) => {
-        const element = messageRefs.current[message.id];
+      messages.forEach((message) => {
+          const element = messageRefs.current[message.id];
 
-        if (!element) return;
+          if (!element) return;
 
-        const observer = new ResizeObserver(() => {
-        const rect = element.getBoundingClientRect();
+          const board = element.closest(".messages");
 
-        const board = element.closest(".messages");
+          if (!board) return;
 
-        if (!board) return;
+          const observer = new ResizeObserver(() => {
+              const rect = element.getBoundingClientRect();
+              const boardRect = board.getBoundingClientRect();
 
-        const boardRect = board.getBoundingClientRect();
+              const widthPercent =
+                  (rect.width / boardRect.width) * 100;
 
-        const widthPercent =
-            (rect.width / boardRect.width) * 100;
+              const heightPercent =
+                  (rect.height / boardRect.height) * 100;
 
-        const heightPercent =
-            (rect.height / boardRect.height) * 100;
+              if (socket.current.readyState !== WebSocket.OPEN) {
+                  return;
+              }
 
-        console.log(
-            message.id,
-            "actual size:",
-            widthPercent,
-            heightPercent
-        );
-        });
+              socket.current.send(
+                  JSON.stringify({
+                      type: "geometry",
+                      message_id: message.id,
+                      width: widthPercent,
+                      height: heightPercent,
+                  })
+              );
+          });
 
-        observer.observe(element);
+          observer.observe(element);
 
-        observers.push(observer);
-    });
+          observers.push(observer);
+      });
 
-    return () => {
-        observers.forEach((observer) => {
-        observer.disconnect();
-        });
-    };
-    }, [messages]);
-
-
+      return () => {
+          observers.forEach((observer) => {
+              observer.disconnect();
+          });
+      };
+  }, [messages]);
 
   function sendMessage() {
     const text = input.trim();
@@ -195,7 +213,7 @@ function App() {
                     left: `${message.position.x}%`,
                     top: `${message.position.y}%`,
                     width: `${message.size.width}%`,
-                    minHeight: `${message.size.height}%`,
+                    height: `${message.size.height}%`,
                     borderColor: message.color,
                 }}
             >

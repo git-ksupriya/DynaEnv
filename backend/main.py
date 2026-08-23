@@ -10,6 +10,7 @@ from backend.spatial import (
     get_message_size,
     find_free_position,
 )
+from backend.spatial import is_position_valid
 
 
 connected_clients: list[WebSocket] = []
@@ -72,6 +73,50 @@ async def websocket_endpoint(websocket: WebSocket):
             raw_message = await websocket.receive_text()
 
             message = json.loads(raw_message)
+
+            if message.get("type") == "geometry":
+
+                message_id = message["message_id"]
+
+                for active_message in active_messages:
+
+                    if active_message["id"] == message_id:
+
+                        new_size = {
+                            "width": message["width"],
+                            "height": message["height"],
+                        }
+
+                        active_message["size"] = new_size
+
+                        if not is_position_valid(
+                            active_message["position"],
+                            new_size,
+                            [
+                                other
+                                for other in active_messages
+                                if other["id"] != message_id
+                            ],
+                        ):
+
+                            new_position = find_free_position(
+                                get_semantic_position(
+                                    active_message["text"]
+                                ),
+                                new_size,
+                                [
+                                    other
+                                    for other in active_messages
+                                    if other["id"] != message_id
+                                ],
+                            )
+
+                            if new_position is not None:
+                                active_message["position"] = new_position
+
+                        break
+
+                continue
 
             message["created_at"] = time.time()
 
