@@ -15,6 +15,9 @@ from backend.embeddings import (
     get_most_similar_and_dissimilar,
 )
 
+MESSAGE_LIMIT = 10
+MESSAGE_WINDOW = 60
+
 connected_clients: list[WebSocket] = []
 active_messages: list[dict] = []
 pending_messages: list[dict] = []
@@ -24,12 +27,12 @@ def calculate_ttl(text: str) -> int:
     length = len(text.strip())
 
     if length <= 5:
-        return 5
-
-    if length <= 30:
         return 10
 
-    return 15
+    if length <= 30:
+        return 20
+
+    return 30
 
 
 async def cleanup_expired_messages():
