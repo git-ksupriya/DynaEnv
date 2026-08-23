@@ -17,6 +17,7 @@ function App() {
   const [input, setInput] = useState("");
 
   const socket = useRef(null);
+  const [waitingCount, setWaitingCount] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -56,6 +57,11 @@ function App() {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+
+      if (message.type === "queue_status") {
+              setWaitingCount(message.count);
+              return;
+            }
 
       setMessages((previousMessages) => {
 
@@ -229,6 +235,12 @@ function App() {
           ))}
 
         </div>
+
+        {waitingCount > 0 && (
+          <div className="queue-indicator">
+            {waitingCount} message{waitingCount !== 1 ? "s" : ""} waiting...
+          </div>
+        )}
 
 
         {/* Message input */}

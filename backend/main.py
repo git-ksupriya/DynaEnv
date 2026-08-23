@@ -7,7 +7,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from backend.spatial import (
     get_message_size,
-    find_free_position,
     get_dynamic_position,
     is_position_valid,
 )
@@ -18,6 +17,7 @@ from backend.embeddings import (
 
 connected_clients: list[WebSocket] = []
 active_messages: list[dict] = []
+pending_messages: list[dict] = []
 
 
 def calculate_ttl(text: str) -> int:
@@ -33,7 +33,9 @@ def calculate_ttl(text: str) -> int:
 
 
 async def cleanup_expired_messages():
+
     while True:
+
         now = time.time()
 
         expired = [
@@ -45,8 +47,21 @@ async def cleanup_expired_messages():
         for message in expired:
             active_messages.remove(message)
 
+        # Something may have opened up.
+        if expired and pending_messages:
+            await process_queue()
+
         await asyncio.sleep(0.5)
 
+async def broadcast_queue_status():
+
+    payload = json.dumps({
+        "type": "queue_status",
+        "count": len(pending_messages),
+    })
+
+    for client in connected_clients:
+        await client.send_text(payload)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,6 +80,101 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+async def try_place_message(message: dict) -> bool:
+
+    # TTL starts NOW because we're attempting to display it.
+    message["created_at"] = time.time()
+
+    ttl = calculate_ttl(
+        message["text"]
+    )
+
+    message["ttl"] = ttl
+
+    message["expires_at"] = (
+        message["created_at"] + ttl
+    )
+
+    # Generate semantic embedding.
+    if "embedding" not in message:
+        message["embedding"] = get_embedding(
+            message["text"]
+        )
+
+    similar_message, dissimilar_message = (
+        get_most_similar_and_dissimilar(
+            message["embedding"],
+            active_messages,
+        )
+    )
+
+    size = get_message_size(
+        message["text"]
+    )
+
+    message["size"] = size
+
+    preferred_position = get_dynamic_position(
+        similar_message,
+        dissimilar_message,
+        active_messages,
+        size,
+    )
+
+    if preferred_position is None:
+        return False
+
+    message["position"] = preferred_position
+
+    active_messages.append(message)
+
+    broadcast_message = {
+        key: value
+        for key, value in message.items()
+        if key != "embedding"
+    }
+
+    payload = json.dumps(
+        broadcast_message
+    )
+
+    for client in connected_clients:
+        await client.send_text(payload)
+
+    return True
+
+async def process_queue():
+
+    while pending_messages:
+
+        message = pending_messages[0]
+
+        # Give the oldest queued message a fresh TTL
+        # only when it is actually being displayed.
+        message["created_at"] = time.time()
+
+        ttl = calculate_ttl(
+            message["text"]
+        )
+
+        message["ttl"] = ttl
+
+        message["expires_at"] = (
+            message["created_at"] + ttl
+        )
+
+        placed = await try_place_message(
+            message
+        )
+
+        if not placed:
+            # Board is still full.
+            # Keep the message in the queue.
+            break
+
+        # Successfully displayed.
+        pending_messages.pop(0)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -123,67 +233,84 @@ async def websocket_endpoint(websocket: WebSocket):
                         break
 
                 continue
+            # If something is already waiting,
+            # preserve FIFO order.
+            if pending_messages:
+                pending_messages.append(message)
 
-            message["created_at"] = time.time()
+                await broadcast_queue_status()
 
-            ttl = calculate_ttl(message["text"])
+                continue
 
-            message["ttl"] = ttl
-
-            message["expires_at"] = (
-                message["created_at"] + ttl
+            # Try to display immediately.
+            placed = await try_place_message(
+                message
             )
+
+            if not placed:
+                pending_messages.append(message)
+
+                await broadcast_queue_status()
+            """
+            #message["created_at"] = time.time()
+
+            #ttl = calculate_ttl(message["text"])
+
+            #message["ttl"] = ttl
+
+            #message["expires_at"] = (
+                #message["created_at"] + ttl
+            #)
 
             # Generate semantic embedding.
-            embedding = get_embedding(
+            #embedding = get_embedding(
                 message["text"]
-            )
+            #)
 
-            message["embedding"] = embedding
+            #message["embedding"] = embedding
 
 
             # Find the strongest semantic attraction
             # and repulsion targets.
-            most_similar, most_dissimilar = (
-                get_most_similar_and_dissimilar(
-                    embedding,
-                    active_messages,
-                )
-            )
+            #most_similar, most_dissimilar = (
+                #get_most_similar_and_dissimilar(
+                   # embedding,
+                   # active_messages, ))
 
-            size = get_message_size(
+            #size = get_message_size(
                 message["text"]
-            )
+            #)
 
-            message["size"] = size
+            #message["size"] = size
 
-            position = get_dynamic_position(
+            #position = get_dynamic_position(
                 most_similar,
                 most_dissimilar,
                 active_messages,
                 size,
-            )
+            #)
 
-            if position is None:
+            #if position is None:
                 # Temporary behavior.
                 # Queueing comes next.
                 continue
 
-            message["position"] = position
-            message["size"] = size
+            #message["position"] = position
+            #message["size"] = size
 
-            active_messages.append(message)
+            #active_messages.append(message)
 
-            broadcast_message = {
-                key: value
-                for key, value in message.items()
-                if key != "embedding"
-            }
+            #broadcast_message = {
+                #key: value
+                #for key, value in message.items()
+                #if key != "embedding"
+            #}
 
-            payload = json.dumps(broadcast_message)
+            #payload = json.dumps(broadcast_message)
 
-            for client in connected_clients:
-                await client.send_text(payload)
+            #for client in connected_clients:
+             #   await client.send_text(payload)
+             """
 
     except WebSocketDisconnect:
         if websocket in connected_clients:
