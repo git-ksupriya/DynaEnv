@@ -1,21 +1,47 @@
-from sentence_transformers import SentenceTransformer
+import os
 import numpy as np
+from dotenv import load_dotenv
+from huggingface_hub import InferenceClient
 
 
-MODEL_NAME = "all-MiniLM-L6-v2"
+ENV_PATH = os.path.join(
+    os.path.dirname(__file__),
+    ".env"
+)
 
-model = SentenceTransformer(MODEL_NAME)
+load_dotenv(ENV_PATH)
 
+
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+if not HF_TOKEN:
+    raise RuntimeError(
+        "HF_TOKEN was not found. "
+        "Make sure backend/.env contains HF_TOKEN."
+    )
+
+
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+client = InferenceClient(
+    api_key=HF_TOKEN
+)
 
 def get_embedding(text: str) -> list[float]:
-    """
-    Convert text into a semantic embedding.
-    """
-
-    embedding = model.encode(
-        text,
-        normalize_embeddings=True,
+    embedding = np.asarray(
+        client.feature_extraction(
+            text,
+            model=MODEL_NAME,
+        ),
+        dtype=np.float32
     )
+
+    norm = np.linalg.norm(embedding)
+
+    if norm == 0:
+        return embedding.tolist()
+
+    embedding = embedding / norm
 
     return embedding.tolist()
 

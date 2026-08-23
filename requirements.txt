@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
 websockets
-sentence-transformers
+huggingface_hub
+python-dotenv
 numpy
